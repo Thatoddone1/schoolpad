@@ -2,7 +2,30 @@ import { json } from '@sveltejs/kit';
 import fetch from 'node-fetch';
 import ICAL from 'ical.js';
 
-export async function GET({ url }) {
+const CORRECT_USERNAME = 'joshua';
+const CORRECT_PASSWORD = 'joshua';
+
+export async function GET({ url, request }) {
+	// Basic Auth check
+	const authHeader = request.headers.get('Authorization');
+	if (!authHeader) {
+		return new Response('Authentication required', {
+			status: 401,
+			headers: {
+				'WWW-Authenticate': 'Basic realm="Restricted Area"'
+			}
+		});
+	}
+
+	const encodedCredentials = authHeader.split(' ')[1];
+	const decodedCredentials = atob(encodedCredentials);
+	const [username, password] = decodedCredentials.split(':');
+
+	if (username !== CORRECT_USERNAME || password !== CORRECT_PASSWORD) {
+		return json({ error: 'Invalid credentials' }, { status: 401 });
+	}
+
+	// Webcal processing
 	const feedUrl = url.searchParams.get('url');
 
 	if (!feedUrl) {
@@ -30,11 +53,8 @@ export async function GET({ url }) {
 					end: event.endDate.toJSDate()
 				};
 			})
-			.filter((event) => {
-				// Filter events that start within the next week and haven't ended yet
-				return event.start >= now && event.start <= oneWeekFromNow && event.end >= now;
-			})
-			.sort((a, b) => a.start - b.start); // Sort events by start date
+			.filter((event) => event.start >= now && event.start <= oneWeekFromNow && event.end >= now)
+			.sort((a, b) => a.start - b.start);
 
 		return json(events);
 	} catch (error) {
